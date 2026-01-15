@@ -52,6 +52,6 @@ y = df_final['Label'].values
 
 # Salvar
 # X_svm e y em formato binário NumPy (.npy) para uso rápido depois
-np.save('X_svm.npy', X_svm)
-np.save('y_labels.npy', y)
+np.save('data/X_svm.npy', X_svm)
+np.save('data/y_labels.npy', y)
 
