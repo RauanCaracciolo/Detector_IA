@@ -53,7 +53,7 @@ model = CNNDetector(vocab_size, embedding_dim, embedding_matrix).to(device)
 criterion = nn.BCELoss()
 optimizer = optim.Adam(model.parameters(), lr = 0.001)
 
-epochs = 10
+epochs = 20
 for epoch in range(epochs):
     model.train()
     total_loss = 0
