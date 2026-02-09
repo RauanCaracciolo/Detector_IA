@@ -5,11 +5,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
+import time
+import gc
 
 device = torch.device('cpu')
+
 X = np.load('data/X_cnn_sequences.npy')
 y = np.load('data/y_labels_cnn.npy')
-
 embedding_matrix = np.load('data/embedding_matrix.npy')
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
@@ -19,59 +21,72 @@ y_train = torch.FloatTensor(y_train)
 X_test = torch.LongTensor(X_test)
 y_test = torch.FloatTensor(y_test)
 
+del X, y
+gc.collect()
+
 train_dataset = TensorDataset(X_train, y_train)
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+
+test_dataset = TensorDataset(X_test, y_test)
+test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+
 
 class CNNDetector(nn.Module):
     def __init__(self, vocab_size, embedding_dim, matrix_w):
         super(CNNDetector, self).__init__()
-
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.embedding.weight.data.copy_(torch.from_numpy(matrix_w))
         self.embedding.weight.requires_grad = False
-
         self.conv = nn.Conv1d(in_channels=embedding_dim, out_channels=128, kernel_size=5)
         self.pool = nn.AdaptiveAvgPool1d(1)
-
-        self.fc1 = nn.Linear(128,64)
+        self.fc1 = nn.Linear(128, 64)
         self.dropout = nn.Dropout(0.5)
-        self.fc2 = nn.Linear(64,1)
+        self.fc2 = nn.Linear(64, 1)
         self.sigmoid = nn.Sigmoid()
+
     def forward(self, x):
         x = self.embedding(x)
-        x = x.permute(0,2,1)
+        x = x.permute(0, 2, 1)
         x = torch.relu(self.conv(x))
         x = self.pool(x).squeeze(-1)
         x = torch.relu(self.fc1(x))
         x = self.dropout(x)
-        x = self.sigmoid(self.fc2(x))
-        return x
+        return self.sigmoid(self.fc2(x))
+
 
 vocab_size, embedding_dim = embedding_matrix.shape
 model = CNNDetector(vocab_size, embedding_dim, embedding_matrix).to(device)
 
 criterion = nn.BCELoss()
-optimizer = optim.Adam(model.parameters(), lr = 0.001)
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-epochs = 20
+epochs = 6
 for epoch in range(epochs):
+    start_time = time.time()
     model.train()
     total_loss = 0
     for texts, labels in train_loader:
-        texts, labels = texts.to(device), labels.to(device).view(-1,1)
-
+        texts, labels = texts.to(device), labels.to(device).view(-1, 1)
         optimizer.zero_grad()
         outputs = model(texts)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
-
         total_loss += loss.item()
 
-model.eval()
-with torch.no_grad():
-    X_test = X_test.to(device)
-    preds = model(X_test).cpu().numpy()
-    y_pred = (preds > 0.5).astype(int)
-    print(classification_report(y_test, y_pred))
+    epoch_duration = time.time() - start_time
+    print(f"Época {epoch + 1} finalizada em {epoch_duration / 60:.2f} minutos")
+
 torch.save(model.state_dict(), 'detector_ia_cnn.pth')
+print("💾 Modelo salvo com sucesso!")
+
+model.eval()
+all_preds = []
+with torch.no_grad():
+    for texts_batch, _ in test_loader:
+        texts_batch = texts_batch.to(device)
+        outputs = model(texts_batch)
+        all_preds.append(outputs.cpu().numpy())
+
+y_pred = (np.concatenate(all_preds) > 0.5).astype(int)
+print(classification_report(y_test.numpy(), y_pred))
