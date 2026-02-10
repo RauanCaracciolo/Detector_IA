@@ -1,0 +1,8 @@
+torch
+torchvision
+joblib
+numpy
+scikit-learn
+huggingface_hub
+safetensors
+streamlit
