@@ -2,17 +2,12 @@
 import pandas as pd
 import re
 import numpy as np
-from huggingface_hub import hf_hub_download
-from safetensors.numpy import load_file
+import joblib
 
-# Carregamento e limpeza dos dados
-df_humano = pd.read_csv("data/dataset_humano.csv")
-df_ia = pd.read_csv("data/dataset_ia.csv")
-
-df_ia = df_ia.drop(columns=["Prompt"], errors='ignore').rename(columns={'Texto_Fragmentado': 'Texto'})
-df_final = pd.concat([df_ia, df_humano[['Texto', 'Label']]], ignore_index=True)
-df_final = df_final.dropna(subset=['Texto']).sample(frac=1, random_state=42).reset_index(drop=True)
-
+df_final = pd.read_csv('data/dataset_final_treinamento.csv')
+df_final = df_final.dropna(subset=['Texto']).drop_duplicates(subset=['Texto'])
+df_final = df_final.sample(frac=1, random_state=42).reset_index(drop=True)
+df_final = df_final.drop('Fonte', axis=1)
 
 def clear_text(text):
     text = str(text).lower()
@@ -22,18 +17,15 @@ def clear_text(text):
 
 df_final['Texto'] = df_final['Texto'].apply(clear_text)
 
-# Carregar e aplicar os embendings prontos
-path = hf_hub_download(repo_id="nilc-nlp/fasttext-cbow-100d", filename="embeddings.safetensors")
-vocab_path = hf_hub_download(repo_id="nilc-nlp/fasttext-cbow-100d", filename="vocab.txt")
-
-vectors = load_file(path)["embeddings"]
-with open(vocab_path) as f:
-    vocab = [w.strip() for w in f]
-
-# Criar dicionario de busca rapida
-word_to_vec = {word: vectors[i] for i, word in enumerate(vocab)}
-dim = vectors.shape[1]  # 100
-
+print("📥 Carregando vetores filtrados...")
+try:
+    # Usa o arquivo gerado pelo Process_CNN_Data.py
+    word_to_vec = joblib.load('data/word_to_vec_small.pkl')
+    dim = 100
+except FileNotFoundError:
+    print("❌ Erro: Execute o Process_CNN_Data.py primeiro para gerar o word_to_vec_small.pkl")
+    exit()
+# ----------------------------------------------------------
 
 # Transformar o texto em vetores de tamanho fixo para o VSM
 def get_mean_vector(text):

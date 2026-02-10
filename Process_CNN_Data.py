@@ -4,6 +4,7 @@ import numpy as np
 from huggingface_hub import hf_hub_download
 from safetensors.numpy import load_file
 from collections import Counter
+import joblib
 
 df_final = pd.read_csv('data/dataset_final_treinamento.csv')
 df_final = df_final.dropna(subset=['Texto']).drop_duplicates(subset=['Texto'])
@@ -32,6 +33,7 @@ with open(vocab_path) as f:
 
 filtered_vectors = []
 word_to_index = {"<PAD>": 0}
+
 filtered_vectors.append(np.zeros(full_vectors.shape[1])) # Vetor de zeros para o PAD
 
 for i, word in enumerate(full_vocab_list):
@@ -40,7 +42,10 @@ for i, word in enumerate(full_vocab_list):
         filtered_vectors.append(full_vectors[i])
 
 embedding_matrix = np.array(filtered_vectors).astype('float32')
+joblib.dump(word_to_index, 'data/word_to_index.pkl')
 
+word_to_vec_small = {word: embedding_matrix[idx] for word, idx in word_to_index.items()}
+joblib.dump(word_to_vec_small, 'data/word_to_vec_small.pkl')
 del full_vectors
 del full_vocab_list
 
